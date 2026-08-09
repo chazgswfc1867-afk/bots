@@ -40,7 +40,8 @@ from spl.token.instructions import get_associated_token_address
 from spl.token.instructions import close_account, CloseAccountParams
 from spl.token.instructions import create_associated_token_account as spl_create_ata
 from spl.token._layouts import MINT_LAYOUT
-from spl.token.constants import TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID
+from solana.publickey import PublicKey
 from dotenv import load_dotenv
 load_dotenv()
 from shared.utils import fetch_wallet_velocity, fetch_market_overview, confirm_tx_landed
@@ -60,7 +61,7 @@ YOUR_HOST = os.getenv("YOUR_HOST")
 YOUR_PORT = os.getenv("YOUR_PORT")
 YOUR_PASSWORD = os.getenv("YOUR_PASSWORD")
 
-TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+TOKEN_2022_PROGRAM_ID = PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
