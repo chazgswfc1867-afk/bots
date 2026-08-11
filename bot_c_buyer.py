@@ -150,11 +150,19 @@ def setup_wallet():
 
 
 def get_ata(owner_pubkey: str, mint: str, program_id: Pubkey = TOKEN_PROGRAM_ID) -> Pubkey:
-    return get_associated_token_address(
-        owner=Pubkey.from_string(owner_pubkey),
-        mint=Pubkey.from_string(mint),
-        token_program_id=program_id
-    )
+    owner = Pubkey.from_string(owner_pubkey)
+    mint_pk = Pubkey.from_string(mint)
+
+    # Token‑2022 ATA derivation (manual PDA)
+    if program_id == TOKEN_2022_PROGRAM_ID:
+        ata, _ = Pubkey.find_program_address(
+            [b"ata", owner.to_bytes(), mint_pk.to_bytes()],
+            TOKEN_2022_PROGRAM_ID
+        )
+        return ata
+
+    # Legacy SPL ATA (supported by spl.token version)
+    return get_associated_token_address(owner, mint_pk)
 
 
 def get_jupiter_quote(input_mint: str, output_mint: str, amount_in: int, slippage_bps: int):
