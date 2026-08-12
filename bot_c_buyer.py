@@ -456,8 +456,16 @@ def run_buyer():
     print("[Bot C] Buyer worker started")
 
     while True:
-        queue_name, raw = r.brpop(QUEUE_IN)
-        msg = json.loads(raw)
+        
+        try:
+            queue_name, raw = r.brpop(QUEUE_IN, timeout=30)
+        except redis.exceptions.TimeoutError:
+            print("[Bot C] Redis timeout — reconnecting…")
+            time.sleep(1)
+            continue
+        if raw is None:
+            continue  # no message, loop again
+        msg = json.loads(raw)  
 
         symbol = msg.get("symbol", "UNKNOWN")
         mint = msg["mint"]
