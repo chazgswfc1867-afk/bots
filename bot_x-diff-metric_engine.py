@@ -96,7 +96,7 @@ class DiffMetricState:
         # -----------------------------
         # Signal logic (tunable)
         # -----------------------------
-        signal_buy = (diff5s >= 8) or (diff7s >= 10) or (diff10s >= 12)
+        signal_buy = (diff5s >= 16) or (diff7s >= 20) or (diff10s >= 24)
         signal_sell = (diff7s <= -10) or (diff10s <= -12)
 
         snapshot = {
