@@ -281,6 +281,8 @@ def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_acti
     if diff_snapshot:
         print("\n========== Pre-Buy Signal Snapshot ==========")
         print(f"Mint: {mint}")
+        print(f"Diff 2s:  {diff_snapshot.get('diff_2s')}")
+        print(f"Diff 3s:  {diff_snapshot.get('diff_3s')}")
         print(f"Diff 5s:  {diff_snapshot.get('diff_5s')}")
         print(f"Diff 7s:  {diff_snapshot.get('diff_7s')}")
         print(f"Diff 10s: {diff_snapshot.get('diff_10s')}")
@@ -566,6 +568,8 @@ def run_buyer():
         if diff_snapshot:
             print("\n========== Post-Buy Signal Snapshot ==========")
             print(f"Mint: {mint}")
+            print(f"Diff 2s:  {diff_snapshot.get('diff_2s')}")
+            print(f"Diff 3s:  {diff_snapshot.get('diff_3s')}")
             print(f"Diff 5s:  {diff_snapshot.get('diff_5s')}")
             print(f"Diff 7s:  {diff_snapshot.get('diff_7s')}")
             print(f"Diff 10s: {diff_snapshot.get('diff_10s')}")
