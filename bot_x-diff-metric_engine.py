@@ -47,6 +47,12 @@ class DiffMetricState:
         self.prev_sum7s  = 0.0
         self.prev_sum10s = 0.0
 
+        # Price history for "already ran" guard  (ts, price)
+        self.recent_prices = deque(maxlen=40)
+
+        # Cooldown
+        self.last_signal_ts = 0
+
     # -----------------------------
     # Helper: prune old entries
     # -----------------------------
@@ -69,7 +75,7 @@ class DiffMetricState:
         if side not in ("buy", "sell") or ts is None:
             return None
 
-        # ---------- Weighting (new) ----------
+        # ---------- Weighting ----------
         sol = abs(float(tick.get("sol_amount", 0)))
         if side == "buy":
             weight = min(sol, 30.0)          # let real size matter on the buy side
@@ -113,32 +119,51 @@ class DiffMetricState:
         self.prev_sum7s  = sum7s
         self.prev_sum10s = sum10s
 
+        # ---------- Price history ----------
+        price = tick.get("price")
+        if price is not None and price > 0:
+            self.recent_prices.append((ts, float(price)))
+
         # -------------------------------------------------
-        # Signal logic (tunable)
+        # Signal logic
         # -------------------------------------------------
+
+        # 1. Volume / acceleration (prefers the onset)
         volume_signal = (
-            (diff2s  >= 8)  or
-            (diff3s  >= 10) or
-            (diff5s  >= 12 and sum3s > 8) or   # short window already hot + longer accelerating
-            (diff7s  >= 15) or
-            (diff10s >= 18)
+            (diff2s >= 9  and sum2s < 35) or
+            (diff3s >= 12 and sum3s < 45) or
+            (diff5s >= 14 and sum3s > 10 and sum5s < 60) or
+            (diff7s >= 16 and sum5s < 70)
         )
 
-        # ---- Wallet-velocity filter (clean plug-in point) ----
-        unique_buyers_ok = True          # default = pass if no snapshot supplied
-
+        # 2. Wallet-velocity filter
+        unique_buyers_ok = True
         if wallet_velocity_snapshot is not None:
-            wallets_buy       = wallet_velocity_snapshot.get("wallets_buy", 0) or 0
-            buy_wallet_ratio  = wallet_velocity_snapshot.get("buy_wallet_ratio") or 0.0
+            wallets_buy      = wallet_velocity_snapshot.get("wallets_buy", 0) or 0
+            buy_wallet_ratio = wallet_velocity_snapshot.get("buy_wallet_ratio") or 0.0
 
-            # Modest requirements – adjust after a few live runs
             unique_buyers_ok = (
                 wallets_buy >= 3 and
                 buy_wallet_ratio >= 0.65
             )
 
-        signal_buy  = volume_signal and unique_buyers_ok
+        # 3. Price-from-low guard (reject if already ran hard)
+        price_ok = True
+        if len(self.recent_prices) >= 3:
+            prices = [p for _, p in self.recent_prices]
+            low = min(prices)
+            current = prices[-1]
+            if low > 0 and (current - low) / low > 0.22:   # >22 % already → too late
+                price_ok = False
+
+        # 4. Cooldown (one signal per mint every 12 s)
+        cooldown_ok = (ts - self.last_signal_ts) > 12
+
+        signal_buy  = volume_signal and unique_buyers_ok and price_ok and cooldown_ok
         signal_sell = (diff7s <= -10) or (diff10s <= -12)
+
+        if signal_buy:
+            self.last_signal_ts = ts
 
         snapshot = {
             "type": "diff_metric",
@@ -160,15 +185,17 @@ class DiffMetricState:
             "signal_buy":  signal_buy,
             "signal_sell": signal_sell,
 
-            # useful for debugging / logging
-            "volume_signal": volume_signal,
-            "unique_buyers_ok": unique_buyers_ok,
+            # debugging
+            "volume_signal":     volume_signal,
+            "unique_buyers_ok":  unique_buyers_ok,
+            "price_ok":          price_ok,
+            "cooldown_ok":       cooldown_ok,
         }
 
         return snapshot
 
 
-def fetch_latest_wallet_velocity(mint: str, lookback: int = 30):
+def fetch_latest_wallet_velocity(mint: str, lookback: int = 40):
     """
     Return the most recent wallet-velocity snapshot for `mint`
     from STREAM_WALLET_VELOCITY, or None if nothing found.
@@ -229,18 +256,11 @@ def run_diff_metric_engine():
                 state = DiffMetricState(mint)
                 mint_states[mint] = state
 
-            snapshot = state.ingest_tick(tick)
-            if snapshot is None:
-                continue
-
-
-            # Optional: pull latest wallet velocity for this mint
+            # ---- single ingest only ----
             wv_snap = fetch_latest_wallet_velocity(mint)
-
             snapshot = state.ingest_tick(tick, wallet_velocity_snapshot=wv_snap)
             if snapshot is None:
                 continue
-
 
             # Push diff snapshot for debugging
             r.rpush(STREAM_DIFF_TICKS, json.dumps({
@@ -250,18 +270,25 @@ def run_diff_metric_engine():
                 "diff_3s": snapshot["diff_3s"],
                 "diff_5s": snapshot["diff_5s"],
                 "diff_7s": snapshot["diff_7s"],
-                "diff_10s": snapshot["diff_10s"]
+                "diff_10s": snapshot["diff_10s"],
+                "volume_signal": snapshot["volume_signal"],
+                "unique_buyers_ok": snapshot["unique_buyers_ok"],
+                "price_ok": snapshot["price_ok"],
+                "cooldown_ok": snapshot["cooldown_ok"],
             }))
 
             print(
                 f"[Bot X] diff → mint={mint} "
-                f"2s={snapshot['diff_2s']} "
-                f"3s={snapshot['diff_3s']} "
-                f"5s={snapshot['diff_5s']} "
-                f"7s={snapshot['diff_7s']} "
-                f"10s={snapshot['diff_10s']} "
+                f"2s={snapshot['diff_2s']:.1f} "
+                f"3s={snapshot['diff_3s']:.1f} "
+                f"5s={snapshot['diff_5s']:.1f} "
+                f"7s={snapshot['diff_7s']:.1f} "
+                f"10s={snapshot['diff_10s']:.1f} "
                 f"BUY={snapshot['signal_buy']} "
-                f"SELL={snapshot['signal_sell']} "
+                f"(vol={snapshot['volume_signal']} "
+                f"uniq={snapshot['unique_buyers_ok']} "
+                f"price={snapshot['price_ok']} "
+                f"cd={snapshot['cooldown_ok']}) "
                 f"time={snapshot['ts']}"
             )
 
@@ -276,7 +303,7 @@ def run_diff_metric_engine():
                     "diff_3s": snapshot["diff_3s"],
                     "diff_5s": snapshot["diff_5s"],
                     "diff_7s": snapshot["diff_7s"],
-                    "diff_10s": snapshot["diff_10s"]
+                    "diff_10s": snapshot["diff_10s"],
                 }))
                 print(f"[Bot X] BUY SIGNAL → mint={mint}")
 
