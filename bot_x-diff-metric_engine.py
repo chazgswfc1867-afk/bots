@@ -1,4 +1,4 @@
-# bots/bot_x_diff-metric_engine.py
+# bots/bot_x-diff-metric_engine.py
 
 import os
 import json
@@ -167,6 +167,7 @@ class DiffMetricState:
 
         return snapshot
 
+
 def fetch_latest_wallet_velocity(mint: str, lookback: int = 30):
     """
     Return the most recent wallet-velocity snapshot for `mint`
@@ -184,6 +185,7 @@ def fetch_latest_wallet_velocity(mint: str, lookback: int = 30):
             return snap
 
     return None
+
 
 # ---------------------------------------------------------
 # Main loop
@@ -231,7 +233,7 @@ def run_diff_metric_engine():
             if snapshot is None:
                 continue
 
-            
+
             # Optional: pull latest wallet velocity for this mint
             wv_snap = fetch_latest_wallet_velocity(mint)
 
@@ -239,11 +241,13 @@ def run_diff_metric_engine():
             if snapshot is None:
                 continue
 
-            
+
             # Push diff snapshot for debugging
             r.rpush(STREAM_DIFF_TICKS, json.dumps({
                 "mint": mint,
                 "ts": snapshot["ts"],
+                "diff_2s": snapshot["diff_2s"],
+                "diff_3s": snapshot["diff_3s"],
                 "diff_5s": snapshot["diff_5s"],
                 "diff_7s": snapshot["diff_7s"],
                 "diff_10s": snapshot["diff_10s"]
@@ -251,6 +255,8 @@ def run_diff_metric_engine():
 
             print(
                 f"[Bot X] diff → mint={mint} "
+                f"2s={snapshot['diff_2s']} "
+                f"3s={snapshot['diff_3s']} "
                 f"5s={snapshot['diff_5s']} "
                 f"7s={snapshot['diff_7s']} "
                 f"10s={snapshot['diff_10s']} "
@@ -266,6 +272,8 @@ def run_diff_metric_engine():
                     "mint": mint,
                     "ts": snapshot["ts"],
                     "reason": "diff_metric",
+                    "diff_2s": snapshot["diff_2s"],
+                    "diff_3s": snapshot["diff_3s"],
                     "diff_5s": snapshot["diff_5s"],
                     "diff_7s": snapshot["diff_7s"],
                     "diff_10s": snapshot["diff_10s"]
