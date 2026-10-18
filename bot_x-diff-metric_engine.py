@@ -116,25 +116,28 @@ class DiffMetricState:
                 self.recent_buy_ts.popleft()
 
         # =================================================
-        # Signal logic
+        # Signal logic  (loosened)
         # =================================================
 
-        # 1. Volume / acceleration (onset-biased)
+        # 1. Volume / acceleration (onset-biased, slightly softer)
         volume_signal = (
-            (diff2s >= 9  and sum2s < 35) or
-            (diff3s >= 12 and sum3s < 45) or
-            (diff5s >= 14 and sum3s > 10 and sum5s < 60) or
-            (diff7s >= 16 and sum5s < 70)
+            (diff2s >= 7  and sum2s < 40) or
+            (diff3s >= 10 and sum3s < 50) or
+            (diff5s >= 12 and sum3s > 8  and sum5s < 70) or
+            (diff7s >= 14 and sum5s < 80)
         )
 
-        # 2. Wallet-velocity filter (from Bot W)
+        # 2. Wallet-velocity filter (from Bot W) – loosened
         unique_buyers_ok = True
         if wallet_velocity_snapshot is not None:
             wallets_buy      = wallet_velocity_snapshot.get("wallets_buy", 0) or 0
             buy_wallet_ratio = wallet_velocity_snapshot.get("buy_wallet_ratio") or 0.0
-            unique_buyers_ok = (wallets_buy >= 3 and buy_wallet_ratio >= 0.65)
+            unique_buyers_ok = (
+                wallets_buy >= 2 and
+                buy_wallet_ratio >= 0.55
+            )
 
-        # 3. Price-from-low guard (already ran too far?)
+        # 3. Price-from-low guard (keep the same)
         price_ok = True
         if len(self.recent_prices) >= 4:
             prices = [p for _, p in self.recent_prices]
@@ -143,23 +146,21 @@ class DiffMetricState:
             if low > 0 and (current - low) / low > 0.22:
                 price_ok = False
 
-        # 4. Short-term rising-price confirmation (new)
+        # 4. Short-term rising-price confirmation (slightly more lenient)
         rising_ok = True
-        if len(self.recent_prices) >= 5:
-            # Look at the last 5 prices
-            recent = [p for _, p in list(self.recent_prices)[-5:]]
-            # Require the newest price to be higher than the median of the previous ones
-            # (simple but effective micro-trend check)
-            if recent[-1] <= sorted(recent[:-1])[len(recent)//2 - 1]:
+        if len(self.recent_prices) >= 4:
+            recent = [p for _, p in list(self.recent_prices)[-4:]]
+            # newest price should be higher than the average of the previous ones
+            if recent[-1] <= sum(recent[:-1]) / len(recent[:-1]):
                 rising_ok = False
 
-        # 5. Trade-density check (new) – at least 3 buys in the last 4 seconds
+        # 5. Trade-density check – loosened to 2 buys in last 4 s
         density_ok = True
         buys_last_4s = sum(1 for t in self.recent_buy_ts if t >= ts - 4)
-        if buys_last_4s < 3:
+        if buys_last_4s < 2:
             density_ok = False
 
-        # 6. Cooldown
+        # 6. Cooldown (unchanged)
         cooldown_ok = (ts - self.last_signal_ts) > 12
 
         signal_buy = (
