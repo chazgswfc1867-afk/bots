@@ -182,7 +182,7 @@ class DiffMetricState:
             density_ok and
             cooldown_ok
         )
-        
+
         signal_sell = (diff7s <= -10) or (diff10s <= -12)
 
         if signal_buy:
@@ -209,7 +209,7 @@ class DiffMetricState:
             "rising_ok":        rising_ok,
             "density_ok":       density_ok,
             "cooldown_ok":      cooldown_ok,
-            "buys_last_4s":     buys_last_4s,
+            "buys_last_5s":     buys_last_5s,
         }
 
         return snapshot
@@ -288,7 +288,7 @@ def run_diff_metric_engine():
                 "rising_ok": snapshot["rising_ok"],
                 "density_ok": snapshot["density_ok"],
                 "cooldown_ok": snapshot["cooldown_ok"],
-                "buys_last_4s": snapshot["buys_last_4s"],
+                "buys_last_5s": snapshot["buys_last_5s"],
             }))
 
             print(
@@ -303,7 +303,7 @@ def run_diff_metric_engine():
                 f"rise={snapshot['rising_ok']} "
                 f"dens={snapshot['density_ok']} "
                 f"cd={snapshot['cooldown_ok']} "
-                f"buys4s={snapshot['buys_last_4s']}) "
+                f"buys5s={snapshot['buys_last_5s']}) "
                 f"t={snapshot['ts']}"
             )
 
