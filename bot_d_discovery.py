@@ -19,7 +19,7 @@ YOUR_PASSWORD = os.getenv("YOUR_PASSWORD")
 ACTIVE_TOKENS = "ACTIVE_TOKENS"
 STREAM_DISCOVERY = "STREAM_DISCOVERY"
 
-MAX_AGE_SECONDS = 25 * 60  # 25 minutes
+MAX_AGE_SECONDS = 15 * 60  # 15 minutes
 
 r = redis.Redis(
     host=YOUR_HOST,
@@ -35,7 +35,7 @@ r = redis.Redis(
 
 def fetch_new_tokens():
     """
-    Fetch tokens 0–2 hours old from Birdeye (reduced to 25 minutes).
+    Fetch tokens 0–2 hours old from Birdeye (reduced to 15 minutes).
     """
     now = int(time.time())
     min_recent = now - MAX_AGE_SECONDS
