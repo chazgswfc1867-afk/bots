@@ -299,11 +299,29 @@ def run_diff_metric_engine():
                     "mint": mint,
                     "ts": snapshot["ts"],
                     "reason": "diff_metric",
+
+                    # diffs
                     "diff_2s": snapshot["diff_2s"],
                     "diff_3s": snapshot["diff_3s"],
                     "diff_5s": snapshot["diff_5s"],
                     "diff_7s": snapshot["diff_7s"],
                     "diff_10s": snapshot["diff_10s"],
+
+                    # sums
+                    "sum_2s": snapshot["sum_2s"],
+                    "sum_3s": snapshot["sum_3s"],
+                    "sum_5s": snapshot["sum_5s"],
+                    "sum_7s": snapshot["sum_7s"],
+                    "sum_10s": snapshot["sum_10s"],
+
+                    # flags + density
+                    "volume_signal": snapshot["volume_signal"],
+                    "unique_buyers_ok": snapshot["unique_buyers_ok"],
+                    "price_ok": snapshot["price_ok"],
+                    "rising_ok": snapshot["rising_ok"],
+                    "density_ok": snapshot["density_ok"],
+                    "cooldown_ok": snapshot["cooldown_ok"],
+                    "buys_last_5s": snapshot["buys_last_5s"],
                 }))
                 print(f"[Bot X] BUY SIGNAL → mint={mint}")
 
