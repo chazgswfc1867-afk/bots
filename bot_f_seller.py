@@ -8,8 +8,6 @@ import pandas as pd
 import numpy as np
 import logging
 from logging.handlers import RotatingFileHandler
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 from datetime import datetime, timezone
 import re
 import json
