@@ -322,7 +322,17 @@ def run_seller():
     print("[Bot F] Seller worker started")
 
     while True:
-        queue_name, raw = r.brpop(QUEUE_SELL)
+
+        try:
+            queue_name, raw = r.brpop(QUEUE_SELL, timeout=30)
+        except redis.exceptions.TimeoutError:
+            print("[Bot F] Redis timeout — reconnecting…")
+            time.sleep(1)
+            continue
+
+        if raw is None:
+            continue  # no message, loop again
+      
         msg = json.loads(raw)
 
         mint = msg["mint"]
