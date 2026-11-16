@@ -40,11 +40,18 @@ class DiffMetricState:
         self.win7s  = deque()
         self.win10s = deque()
 
+        # New medium windows
+        self.win15s = deque()
+        self.win30s = deque()
+
         self.prev_sum2s  = 0.0
         self.prev_sum3s  = 0.0
         self.prev_sum5s  = 0.0
         self.prev_sum7s  = 0.0
         self.prev_sum10s = 0.0
+        self.prev_sum15s = 0.0
+        self.prev_sum30s = 0.0
+
 
         # Price history for guards  (ts, price)
         self.recent_prices = deque(maxlen=50)
@@ -79,7 +86,8 @@ class DiffMetricState:
         # Append + prune weighted windows
         for win, secs in [
             (self.win2s, 2), (self.win3s, 3), (self.win5s, 5),
-            (self.win7s, 7), (self.win10s, 10)
+            (self.win7s, 7), (self.win10s, 10),
+            (self.win15s, 15), (self.win30s, 30)
         ]:
             win.append((ts, val))
             self.prune(win, ts, secs)
@@ -90,18 +98,24 @@ class DiffMetricState:
         sum5s  = sum(v for _, v in self.win5s)
         sum7s  = sum(v for _, v in self.win7s)
         sum10s = sum(v for _, v in self.win10s)
+        sum15s = sum(v for _, v in self.win15s)
+        sum30s = sum(v for _, v in self.win30s)
 
         diff2s  = sum2s  - self.prev_sum2s
         diff3s  = sum3s  - self.prev_sum3s
         diff5s  = sum5s  - self.prev_sum5s
         diff7s  = sum7s  - self.prev_sum7s
         diff10s = sum10s - self.prev_sum10s
+        diff15s = sum15s - self.prev_sum15s
+        diff30s = sum30s - self.prev_sum30s
 
         self.prev_sum2s  = sum2s
         self.prev_sum3s  = sum3s
         self.prev_sum5s  = sum5s
         self.prev_sum7s  = sum7s
         self.prev_sum10s = sum10s
+        self.prev_sum15s = sum15s
+        self.prev_sum30s = sum30s
 
         # ---------- Price history ----------
         price = tick.get("price")
@@ -119,13 +133,26 @@ class DiffMetricState:
         # Signal logic  (balanced – more substance required)
         # =================================================
 
-        # 1. Volume / acceleration – needs both impulse AND some absolute size
-        volume_signal = (
-            (diff2s >= 6 and sum2s >= 8) or
-            (diff3s >= 8 and sum3s >= 10) or
-            (diff5s >= 10 and sum3s >= 12) or
-            (sum2s >= 15 and diff2s > 3)          # sustained short-window flow
+
+
+        # Short-window path (original, slightly softened)
+        short_signal = (
+            (diff2s >= 5 and sum2s >= 7) or
+            (diff3s >= 7 and sum3s >= 9) or
+            (diff5s >= 9 and sum3s >= 11) or
+            (sum2s >= 12 and diff2s > 2)
         )
+
+        # Medium-window path (new – catches the 1-minute scale moves)
+        medium_signal = (
+            (diff15s >= 12 and sum15s >= 18) or
+            (diff30s >= 18 and sum30s >= 25) or
+            (sum15s >= 25 and diff15s > 5) or
+            (sum30s >= 35 and diff30s > 8)
+        )
+
+        volume_signal = short_signal or medium_signal
+
 
         # 2. Wallet-velocity – soft
         unique_buyers_ok = True
@@ -181,15 +208,19 @@ class DiffMetricState:
 
             "sum_2s": sum2s, "sum_3s": sum3s, "sum_5s": sum5s,
             "sum_7s": sum7s, "sum_10s": sum10s,
+            "sum_15s": sum15s, "sum_30s": sum30s,
 
             "diff_2s": diff2s, "diff_3s": diff3s, "diff_5s": diff5s,
             "diff_7s": diff7s, "diff_10s": diff10s,
+            "diff_15s": diff15s, "diff_30s": diff30s,
 
             "signal_buy": signal_buy,
             "signal_sell": signal_sell,
 
             # debugging flags
             "volume_signal":    volume_signal,
+            "short_signal": short_signal,
+            "medium_signal": medium_signal,
             "unique_buyers_ok": unique_buyers_ok,
             "price_ok":         price_ok,
             "rising_ok":        rising_ok,
@@ -268,6 +299,8 @@ def run_diff_metric_engine():
                 "diff_5s": snapshot["diff_5s"],
                 "diff_7s": snapshot["diff_7s"],
                 "diff_10s": snapshot["diff_10s"],
+                "diff_15s": snapshot["diff_15s"],
+                "diff_30s": snapshot["diff_30s"],
                 "volume_signal": snapshot["volume_signal"],
                 "unique_buyers_ok": snapshot["unique_buyers_ok"],
                 "price_ok": snapshot["price_ok"],
@@ -282,6 +315,10 @@ def run_diff_metric_engine():
                 f"2s={snapshot['diff_2s']:.1f} "
                 f"3s={snapshot['diff_3s']:.1f} "
                 f"5s={snapshot['diff_5s']:.1f} "
+                f"7s={snapshot['diff_7s']:.1f} "
+                f"10s={snapshot['diff_10s']:.1f} "
+                f"15s={snapshot['diff_15s']:.1f} "
+                f"30s={snapshot['diff_30s']:.1f} "
                 f"BUY={snapshot['signal_buy']} "
                 f"(vol={snapshot['volume_signal']} "
                 f"uniq={snapshot['unique_buyers_ok']} "
@@ -292,6 +329,7 @@ def run_diff_metric_engine():
                 f"buys5s={snapshot['buys_last_5s']}) "
                 f"t={snapshot['ts']}"
             )
+
 
             if snapshot["signal_buy"]:
                 r.rpush(STREAM_DIFF_METRIC, json.dumps({
@@ -306,6 +344,9 @@ def run_diff_metric_engine():
                     "diff_5s": snapshot["diff_5s"],
                     "diff_7s": snapshot["diff_7s"],
                     "diff_10s": snapshot["diff_10s"],
+                    "diff_15s": snapshot["diff_15s"],
+                    "diff_30s": snapshot["diff_30s"],
+
 
                     # sums
                     "sum_2s": snapshot["sum_2s"],
@@ -313,6 +354,9 @@ def run_diff_metric_engine():
                     "sum_5s": snapshot["sum_5s"],
                     "sum_7s": snapshot["sum_7s"],
                     "sum_10s": snapshot["sum_10s"],
+                    "sum_15s": snapshot["sum_15s"],
+                    "sum_30s": snapshot["sum_30s"],
+
 
                     # flags + density
                     "volume_signal": snapshot["volume_signal"],
@@ -324,6 +368,7 @@ def run_diff_metric_engine():
                     "buys_last_5s": snapshot["buys_last_5s"],
                 }))
                 print(f"[Bot X] BUY SIGNAL → mint={mint}")
+
 
         except Exception as e:
             print(f"[Bot X] Error: {e}")
