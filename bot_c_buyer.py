@@ -264,7 +264,7 @@ def send_signed_tx(base64_tx: str, keypair: Keypair):
 # Logging helpers
 # ---------------------------------------
 
-def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_action):
+def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_action, msg):
     print("\n========== Execute This Buy ==========")
     print(f"Token: {symbol} ({mint})")
     print(f"Base Spend: {amount_base / 1e9:.4f} SOL")
@@ -272,6 +272,7 @@ def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_acti
     print(f"Risk Score: {risk_score} | Risk Action: {risk_action}")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print("======================================\n")
+
 
     # ----------------------------------------------------
     # Log the exact trigger values that Bot X sent
@@ -300,6 +301,9 @@ def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_acti
           f"cd={msg.get('cooldown_ok')}")
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print("============================================================\n")
+
+
+
 
 
 # ---------------------------------------
@@ -467,16 +471,18 @@ def run_buyer():
     print("[Bot C] Buyer worker started")
 
     while True:
-        
+
         try:
             queue_name, raw = r.brpop(QUEUE_IN, timeout=30)
         except redis.exceptions.TimeoutError:
             print("[Bot C] Redis timeout — reconnecting…")
             time.sleep(1)
             continue
+
         if raw is None:
             continue  # no message, loop again
-        msg = json.loads(raw)  
+
+        msg = json.loads(raw)
 
         symbol = msg.get("symbol", "UNKNOWN")
         mint = msg["mint"]
@@ -535,7 +541,8 @@ def run_buyer():
             amount_base_lamports,
             quote,
             risk_score_val,
-            risk_action
+            risk_action,
+            msg
         )
 
         # ----------------------------------------------------
