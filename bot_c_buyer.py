@@ -273,33 +273,33 @@ def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_acti
     print(f"Date: {datetime.now(timezone.utc).isoformat()}")
     print("======================================\n")
 
-        # ----------------------------------------------------
-        # Log the exact trigger values that Bot X sent
-        # ----------------------------------------------------
-        print("\n========== Pre-Buy Signal Snapshot (exact trigger) ==========")
-        print(f"Mint: {mint}")
-        print(f"Diff 2s:  {msg.get('diff_2s')}")
-        print(f"Diff 3s:  {msg.get('diff_3s')}")
-        print(f"Diff 5s:  {msg.get('diff_5s')}")
-        print(f"Diff 7s:  {msg.get('diff_7s')}")
-        print(f"Diff 10s: {msg.get('diff_10s')}")
-        print(f"Diff 15s: {msg.get('diff_15s')}")
-        print(f"Diff 30s: {msg.get('diff_30s')}")
-        print(f"Sum 2s:   {msg.get('sum_2s')}")
-        print(f"Sum 3s:   {msg.get('sum_3s')}")
-        print(f"Sum 15s:  {msg.get('sum_15s')}")
-        print(f"Sum 30s:  {msg.get('sum_30s')}")
-        print(f"Buys last 5s: {msg.get('buys_last_5s')}")
-        print(f"Flags → vol={msg.get('volume_signal')} "
-              f"short={msg.get('short_signal')} "
-              f"medium={msg.get('medium_signal')} "
-              f"uniq={msg.get('unique_buyers_ok')} "
-              f"price={msg.get('price_ok')} "
-              f"rise={msg.get('rising_ok')} "
-              f"dens={msg.get('density_ok')} "
-              f"cd={msg.get('cooldown_ok')}")
-        print(f"Date: {datetime.now(timezone.utc).isoformat()}")
-        print("============================================================\n")
+    # ----------------------------------------------------
+    # Log the exact trigger values that Bot X sent
+    # ----------------------------------------------------
+    print("\n========== Pre-Buy Signal Snapshot (exact trigger) ==========")
+    print(f"Mint: {mint}")
+    print(f"Diff 2s:  {msg.get('diff_2s')}")
+    print(f"Diff 3s:  {msg.get('diff_3s')}")
+    print(f"Diff 5s:  {msg.get('diff_5s')}")
+    print(f"Diff 7s:  {msg.get('diff_7s')}")
+    print(f"Diff 10s: {msg.get('diff_10s')}")
+    print(f"Diff 15s: {msg.get('diff_15s')}")
+    print(f"Diff 30s: {msg.get('diff_30s')}")
+    print(f"Sum 2s:   {msg.get('sum_2s')}")
+    print(f"Sum 3s:   {msg.get('sum_3s')}")
+    print(f"Sum 15s:  {msg.get('sum_15s')}")
+    print(f"Sum 30s:  {msg.get('sum_30s')}")
+    print(f"Buys last 5s: {msg.get('buys_last_5s')}")
+    print(f"Flags → vol={msg.get('volume_signal')} "
+          f"short={msg.get('short_signal')} "
+          f"medium={msg.get('medium_signal')} "
+          f"uniq={msg.get('unique_buyers_ok')} "
+          f"price={msg.get('price_ok')} "
+          f"rise={msg.get('rising_ok')} "
+          f"dens={msg.get('density_ok')} "
+          f"cd={msg.get('cooldown_ok')}")
+    print(f"Date: {datetime.now(timezone.utc).isoformat()}")
+    print("============================================================\n")
 
 
 # ---------------------------------------
