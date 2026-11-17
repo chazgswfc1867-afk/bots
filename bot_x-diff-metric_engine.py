@@ -302,6 +302,8 @@ def run_diff_metric_engine():
                 "diff_15s": snapshot["diff_15s"],
                 "diff_30s": snapshot["diff_30s"],
                 "volume_signal": snapshot["volume_signal"],
+                "short_signal": snapshot["short_signal"],
+                "medium_signal": snapshot["medium_signal"],
                 "unique_buyers_ok": snapshot["unique_buyers_ok"],
                 "price_ok": snapshot["price_ok"],
                 "rising_ok": snapshot["rising_ok"],
@@ -360,6 +362,8 @@ def run_diff_metric_engine():
 
                     # flags + density
                     "volume_signal": snapshot["volume_signal"],
+                    "short_signal": snapshot["short_signal"],
+                    "medium_signal": snapshot["medium_signal"],
                     "unique_buyers_ok": snapshot["unique_buyers_ok"],
                     "price_ok": snapshot["price_ok"],
                     "rising_ok": snapshot["rising_ok"],
