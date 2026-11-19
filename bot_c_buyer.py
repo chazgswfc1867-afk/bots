@@ -238,7 +238,6 @@ def get_jupiter_swap_tx(quote, user_pubkey: Pubkey):
     return data["swapTransaction"]  # base64 tx
 
 
-
 def send_signed_tx(base64_tx: str, keypair: Keypair):
     try:
         raw = b64decode(base64_tx)
@@ -255,10 +254,26 @@ def send_signed_tx(base64_tx: str, keypair: Keypair):
 
     try:
         resp = sol_client.send_raw_transaction(bytes(signed_tx))
-        return str(resp.value)
+
+        # Handle both object-style and dict-style responses
+        if hasattr(resp, "value"):
+            sig = resp.value
+        elif isinstance(resp, dict):
+            sig = resp.get("result") or resp.get("value")
+        else:
+            sig = str(resp)
+
+        if sig is None:
+            print(f"[Bot C] send_raw_transaction returned no signature: {resp}")
+            return None
+
+        return str(sig)
+
     except Exception as e:
         print(f"[Bot C] Failed to send signed transaction: {e}")
         return None
+
+
 
 # ---------------------------------------
 # Logging helpers
