@@ -171,12 +171,24 @@ class DiffMetricState:
             if low > 0 and (current - low) / low > 0.25:
                 price_ok = False
 
-        # 4. Rising – only reject clear declines
+        # 4. Rising – stricter after large recent dumps
         rising_ok = True
-        if len(self.recent_prices) >= 3:
-            recent = [p for _, p in list(self.recent_prices)[-3:]]
-            if recent[-1] < recent[0] * 0.98:      # more than 2 % down
+        if len(self.recent_prices) >= 6:
+            prices = [p for _, p in self.recent_prices]
+            recent = prices[-3:]
+            earlier = prices[-6:-3]
+
+            # Normal case: newest should not be clearly lower
+            if recent[-1] < recent[0] * 0.98:
                 rising_ok = False
+
+            # Extra protection: if we just had a big dump, demand clearer recovery
+            max_earlier = max(earlier)
+            min_recent = min(recent)
+            if max_earlier > 0 and (max_earlier - min_recent) / max_earlier > 0.40:
+                # We just saw >40 % drop – require the latest price to be meaningfully above the low
+                if recent[-1] < min_recent * 1.08:
+                    rising_ok = False
 
         # 5. Density – require real activity
         density_ok = True
