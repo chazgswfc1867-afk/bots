@@ -270,65 +270,60 @@ def find_position_for_mint(positions: List[Dict[str, Any]], mint: str) -> Dict[s
     return None
 
 
-def get_token_balance_raw(mint: str, owner: str) -> int:
-    # Option A: via Helius (fast, consistent with what we did in Bot C)
-    url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
-    resp = requests.get(url, timeout=10)
-    data = resp.json()
-
-    for t in data.get("tokens", []):
-        if t.get("mint") == mint:
-            # Helius usually exposes raw amount as `amount` or `tokenAmount`
-            return int(t.get("amount", 0))
-
-    return 0
-
-
-def get_token_balance_raw_rpc(mint: str, owner: str) -> int:
-    """Works on older solana-py versions."""
+def get_token_balance_raw_safe(mint: str, owner: str) -> int:
+    """
+    Defensive token balance reader that works with older solana-py versions.
+    Returns raw token amount (integer).
+    """
+    # ---------- 1. RPC (preferred) ----------
     try:
         owner_pk = Pubkey.from_string(owner)
-        mint_pk = Pubkey.from_string(mint)
+        mint_pk  = Pubkey.from_string(mint)
 
-        # Older method that is more widely available
         resp = sol_client.get_token_accounts_by_owner(
             owner_pk,
             TokenAccountOpts(mint=mint_pk)
         )
 
+        # Handle both object-style and raw-dict responses
+        if isinstance(resp, dict):
+            accounts = resp.get("result", {}).get("value", []) or []
+        else:
+            accounts = getattr(resp, "value", []) or []
+
         total = 0
-        for acc in resp.value:
+        for acc in accounts:
             try:
-                # parsed account data
-                parsed = acc.account.data.parsed
+                # Two common shapes
+                if isinstance(acc, dict):
+                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {})
+                else:
+                    parsed = acc.account.data.parsed
+
                 amt = int(parsed["info"]["tokenAmount"]["amount"])
                 total += amt
             except Exception:
                 continue
-        return total
+
+        if total > 0:
+            return total
+
     except Exception as e:
-        print(f"[Bot F] RPC token balance fetch failed: {e}")
-        return 0
+        print(f"[balance] RPC failed: {e}")
 
-
-def get_token_balance_raw(mint: str, owner: str) -> int:
-    """Helius fallback – more defensive."""
+    # ---------- 2. Helius fallback ----------
     try:
         url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
-        resp = requests.get(url, timeout=10)
-
-        if resp.status_code != 200 or not resp.text.strip():
-            print(f"[Bot F] Helius balances empty/non-200: {resp.status_code}")
-            return 0
-
-        data = resp.json()
-        for t in data.get("tokens", []):
-            if t.get("mint") == mint:
-                return int(t.get("amount", 0) or t.get("tokenAmount", 0) or 0)
-        return 0
+        resp = requests.get(url, timeout=8)
+        if resp.status_code == 200 and resp.text.strip():
+            data = resp.json()
+            for t in data.get("tokens", []):
+                if t.get("mint") == mint:
+                    return int(t.get("amount") or t.get("tokenAmount") or 0)
     except Exception as e:
-        print(f"[Bot F] Helius balance fetch failed: {e}")
-        return 0
+        print(f"[balance] Helius failed: {e}")
+
+    return 0
 
 
 
@@ -400,11 +395,7 @@ def run_seller():
         # ----------------------------------------------------
         # On-chain balance detection (RPC first, Helius fallback)
         # ----------------------------------------------------
-        onchain_raw = get_token_balance_raw_rpc(mint, wallet_address)
-
-        if onchain_raw == 0:
-            # fallback to Helius (rarely helps, but cheap)
-            onchain_raw = get_token_balance_raw(mint, wallet_address)
+        onchain_raw = get_token_balance_raw_safe(mint, wallet_address)
 
         if onchain_raw <= 0:
             print(f"[Bot F] ❌ On-chain balance is zero for {symbol} — cannot sell. Keeping position open.")
