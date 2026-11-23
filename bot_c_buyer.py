@@ -274,7 +274,6 @@ def send_signed_tx(base64_tx: str, keypair: Keypair):
         return None
 
 
-
 # ---------------------------------------
 # Logging helpers
 # ---------------------------------------
@@ -328,27 +327,6 @@ def log_execute_this_buy(symbol, mint, amount_base, quote, risk_score, risk_acti
 def get_token_decimals(mint: str) -> int:
     info = sol_client.get_token_supply(mint)
     return int(info["result"]["value"]["decimals"])
-
-
-
-
-def get_actual_token_amount_helius(sig: str, mint: str, owner: str) -> int:
-    url = f"https://api.helius.xyz/v0/transactions/?api-key={HELIUS_API_KEY}"
-    resp = requests.post(url, json={"transactions": [sig]}, timeout=10)
-    data = resp.json()
-
-    if not data or "tokenTransfers" not in data[0]:
-        return 0
-
-    for t in data[0]["tokenTransfers"]:
-        if t.get("mint") == mint and t.get("toUserAccount") == owner:
-            return int(t.get("tokenAmount", 0))
-
-    return 0
-
-
-
-
 
 
 def build_position_record(
@@ -611,30 +589,30 @@ def run_buyer():
 
 
         # ----------------------------------------------------
-        # Token Amounts (actual from chain, fallback to quote)
+        # Token Amounts – prefer on-chain delta, then quote
         # ----------------------------------------------------
-        # Always get decimals first
         try:
             decimals = get_token_decimals(mint)
         except Exception:
             decimals = 6
 
+        out_amount_raw = 0
+
+        # 1. Best source: parse the confirmed transaction
         try:
-            out_amount_raw = get_actual_token_amount_helius(sig, mint, str(OWNER_PUBKEY))
-            if out_amount_raw <= 0:
-                out_amount_raw = int(quote.get("outAmount", 0))
+            delta_raw, dec = get_actual_token_delta(sig, mint, str(OWNER_PUBKEY))
+            if delta_raw > 0:
+                out_amount_raw = delta_raw
+                decimals = dec
         except Exception as e:
-            print(f"[Bot C] Failed to fetch actual token amount for {symbol}: {e}")
+            print(f"[Bot C] RPC token delta failed: {e}")
+
+        # 2. Fallback to Jupiter quote
+        if out_amount_raw <= 0:
             out_amount_raw = int(quote.get("outAmount", 0))
+            print(f"[Bot C] Using Jupiter quote amount as fallback: {out_amount_raw}")
 
         tokens_ui = out_amount_raw / (10 ** decimals)
-
-        logger.info(
-            f"[EXEC_BUY_CONFIRMED] {symbol} | mint={mint} | "
-            f"tx={sig} | price={price} | "
-            f"amount_received_raw={out_amount_raw} | amount_received={tokens_ui} | "
-            f"decimals={decimals} | spend_sol={amount_base_sol}"
-        )
 
 
         # ----------------------------------------------------
