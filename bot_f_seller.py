@@ -204,27 +204,39 @@ def get_jupiter_swap_tx(quote, user_pubkey: Pubkey):
 
 
 
-
-
 def send_signed_tx(base64_tx: str, keypair: Keypair):
     try:
-        raw_tx = b64decode(base64_tx)
-        versioned_tx = VersionedTransaction.from_bytes(raw_tx)
+        raw = b64decode(base64_tx)
+        tx = VersionedTransaction.from_bytes(raw)
     except Exception as e:
-        print(f"[Bot F] ❌ Failed to decode Jupiter transaction: {e}")
+        print(f"[Bot F] Failed to decode Jupiter transaction: {e}")
         return None
 
     try:
-        signed_tx = VersionedTransaction(versioned_tx.message, [keypair])
+        signed_tx = VersionedTransaction(tx.message, [keypair])
     except Exception as e:
-        print(f"[Bot F] ❌ Failed to sign Jupiter transaction: {e}")
+        print(f"[Bot F] Failed to sign Jupiter transaction: {e}")
         return None
 
     try:
         resp = sol_client.send_raw_transaction(bytes(signed_tx))
-        return str(resp.value)
+
+        # Handle both object-style and dict-style responses
+        if hasattr(resp, "value"):
+            sig = resp.value
+        elif isinstance(resp, dict):
+            sig = resp.get("result") or resp.get("value")
+        else:
+            sig = str(resp)
+
+        if sig is None:
+            print(f"[Bot F] send_raw_transaction returned no signature: {resp}")
+            return None
+
+        return str(sig)
+
     except Exception as e:
-        print(f"[Bot F] ❌ Failed to send signed transaction: {e}")
+        print(f"[Bot F] Failed to send signed transaction: {e}")
         return None
 
 
@@ -273,29 +285,50 @@ def get_token_balance_raw(mint: str, owner: str) -> int:
 
 
 def get_token_balance_raw_rpc(mint: str, owner: str) -> int:
-    owner_pk = Pubkey.from_string(owner)
-    mint_pk = Pubkey.from_string(mint)
-
-    total = 0
-
+    """Works on older solana-py versions."""
     try:
-        resp = sol_client.get_token_accounts_by_owner_json_parsed(
+        owner_pk = Pubkey.from_string(owner)
+        mint_pk = Pubkey.from_string(mint)
+
+        # Older method that is more widely available
+        resp = sol_client.get_token_accounts_by_owner(
             owner_pk,
             TokenAccountOpts(mint=mint_pk)
         )
+
+        total = 0
+        for acc in resp.value:
+            try:
+                # parsed account data
+                parsed = acc.account.data.parsed
+                amt = int(parsed["info"]["tokenAmount"]["amount"])
+                total += amt
+            except Exception:
+                continue
+        return total
     except Exception as e:
         print(f"[Bot F] RPC token balance fetch failed: {e}")
         return 0
 
-    for acc in resp.value:
-        try:
-            ui = acc.account.data.parsed["info"]["tokenAmount"]
-            amt = int(ui["amount"])
-            total += amt
-        except Exception:
-            continue
 
-    return total
+def get_token_balance_raw(mint: str, owner: str) -> int:
+    """Helius fallback – more defensive."""
+    try:
+        url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
+        resp = requests.get(url, timeout=10)
+
+        if resp.status_code != 200 or not resp.text.strip():
+            print(f"[Bot F] Helius balances empty/non-200: {resp.status_code}")
+            return 0
+
+        data = resp.json()
+        for t in data.get("tokens", []):
+            if t.get("mint") == mint:
+                return int(t.get("amount", 0) or t.get("tokenAmount", 0) or 0)
+        return 0
+    except Exception as e:
+        print(f"[Bot F] Helius balance fetch failed: {e}")
+        return 0
 
 
 
@@ -332,7 +365,7 @@ def run_seller():
 
         if raw is None:
             continue  # no message, loop again
-      
+
         msg = json.loads(raw)
 
         mint = msg["mint"]
