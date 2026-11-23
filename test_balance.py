@@ -14,9 +14,9 @@ WALLET = os.getenv("WALLET_ADDRESS")
 
 sol_client = Client(RPC_URL)
 
+
 def get_token_balance_raw_safe(mint: str, owner: str) -> int:
-    """Defensive token balance reader."""
-    # 1. RPC
+    print("\n--- RPC attempt ---")
     try:
         owner_pk = Pubkey.from_string(owner)
         mint_pk  = Pubkey.from_string(mint)
@@ -26,43 +26,43 @@ def get_token_balance_raw_safe(mint: str, owner: str) -> int:
             TokenAccountOpts(mint=mint_pk)
         )
 
+        print(f"Type of resp: {type(resp)}")
+        print(f"resp = {resp}")          # full raw response
+
         if isinstance(resp, dict):
             accounts = resp.get("result", {}).get("value", []) or []
+            print("Treated as dict")
         else:
-            accounts = getattr(resp, "value", []) or []
+            accounts = getattr(resp, "value", None)
+            print(f"Treated as object, .value = {accounts}")
+
+        if not accounts:
+            print("No accounts found in response")
+            return 0
 
         total = 0
-        for acc in accounts:
+        for i, acc in enumerate(accounts):
+            print(f"\nAccount [{i}] type: {type(acc)}")
+            print(f"Account [{i}] content: {acc}")
+
             try:
                 if isinstance(acc, dict):
                     parsed = acc.get("account", {}).get("data", {}).get("parsed", {})
                 else:
                     parsed = acc.account.data.parsed
+
+                print(f"Parsed: {parsed}")
                 amt = int(parsed["info"]["tokenAmount"]["amount"])
+                print(f"Extracted amount: {amt}")
                 total += amt
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"Failed to parse account [{i}]: {e}")
 
-        if total > 0:
-            return total
+        return total
+
     except Exception as e:
-        print(f"[RPC] failed: {e}")
-
-    # 2. Helius
-    try:
-        url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
-        resp = requests.get(url, timeout=8)
-        if resp.status_code == 200 and resp.text.strip():
-            data = resp.json()
-            for t in data.get("tokens", []):
-                if t.get("mint") == mint:
-                    return int(t.get("amount") or t.get("tokenAmount") or 0)
-        else:
-            print(f"[Helius] status={resp.status_code}")
-    except Exception as e:
-        print(f"[Helius] failed: {e}")
-
-    return 0
+        print(f"RPC exception: {e}")
+        return 0
 
 
 if __name__ == "__main__":
