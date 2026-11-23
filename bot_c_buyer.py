@@ -434,6 +434,64 @@ def get_actual_token_delta(sig: str, mint: str, owner_str: str):
 
 
 
+def get_token_balance_raw_safe(mint: str, owner: str) -> int:
+    """
+    Defensive token balance reader that works with older solana-py versions.
+    Returns raw token amount (integer).
+    """
+    # ---------- 1. RPC (preferred) ----------
+    try:
+        owner_pk = Pubkey.from_string(owner)
+        mint_pk  = Pubkey.from_string(mint)
+
+        resp = sol_client.get_token_accounts_by_owner(
+            owner_pk,
+            TokenAccountOpts(mint=mint_pk)
+        )
+
+        # Handle both object-style and raw-dict responses
+        if isinstance(resp, dict):
+            accounts = resp.get("result", {}).get("value", []) or []
+        else:
+            accounts = getattr(resp, "value", []) or []
+
+        total = 0
+        for acc in accounts:
+            try:
+                # Two common shapes
+                if isinstance(acc, dict):
+                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {})
+                else:
+                    parsed = acc.account.data.parsed
+
+                amt = int(parsed["info"]["tokenAmount"]["amount"])
+                total += amt
+            except Exception:
+                continue
+
+        if total > 0:
+            return total
+
+    except Exception as e:
+        print(f"[balance] RPC failed: {e}")
+
+    # ---------- 2. Helius fallback ----------
+    try:
+        url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
+        resp = requests.get(url, timeout=8)
+        if resp.status_code == 200 and resp.text.strip():
+            data = resp.json()
+            for t in data.get("tokens", []):
+                if t.get("mint") == mint:
+                    return int(t.get("amount") or t.get("tokenAmount") or 0)
+    except Exception as e:
+        print(f"[balance] Helius failed: {e}")
+
+    return 0
+
+
+
+
 def fetch_latest_diff_snapshot(mint: str):
     """
     Fetch the most recent diff snapshot for a given mint from STREAM_DIFF_TICKS.
@@ -589,28 +647,20 @@ def run_buyer():
 
 
         # ----------------------------------------------------
-        # Token Amounts – prefer on-chain delta, then quote
+        # Token amount – read real on-chain balance
         # ----------------------------------------------------
         try:
             decimals = get_token_decimals(mint)
         except Exception:
             decimals = 6
 
-        out_amount_raw = 0
+        # Best source: current on-chain balance of the ATA
+        out_amount_raw = get_token_balance_raw_safe(mint, str(OWNER_PUBKEY))
 
-        # 1. Best source: parse the confirmed transaction
-        try:
-            delta_raw, dec = get_actual_token_delta(sig, mint, str(OWNER_PUBKEY))
-            if delta_raw > 0:
-                out_amount_raw = delta_raw
-                decimals = dec
-        except Exception as e:
-            print(f"[Bot C] RPC token delta failed: {e}")
-
-        # 2. Fallback to Jupiter quote
         if out_amount_raw <= 0:
+            # Last resort
             out_amount_raw = int(quote.get("outAmount", 0))
-            print(f"[Bot C] Using Jupiter quote amount as fallback: {out_amount_raw}")
+            print(f"[Bot C] Using Jupiter quote as last resort: {out_amount_raw}")
 
         tokens_ui = out_amount_raw / (10 ** decimals)
 
