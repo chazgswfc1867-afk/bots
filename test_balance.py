@@ -16,52 +16,41 @@ sol_client = Client(RPC_URL)
 
 
 def get_token_balance_raw_safe(mint: str, owner: str) -> int:
-    print("\n--- RPC attempt ---")
+    """Defensive token balance reader – forces jsonParsed."""
     try:
         owner_pk = Pubkey.from_string(owner)
         mint_pk  = Pubkey.from_string(mint)
 
+        # Force jsonParsed encoding
         resp = sol_client.get_token_accounts_by_owner(
             owner_pk,
-            TokenAccountOpts(mint=mint_pk)
+            TokenAccountOpts(mint=mint_pk, encoding="jsonParsed")
         )
 
-        print(f"Type of resp: {type(resp)}")
-        print(f"resp = {resp}")          # full raw response
-
+        # Handle both dict and object responses
         if isinstance(resp, dict):
             accounts = resp.get("result", {}).get("value", []) or []
-            print("Treated as dict")
         else:
-            accounts = getattr(resp, "value", None)
-            print(f"Treated as object, .value = {accounts}")
-
-        if not accounts:
-            print("No accounts found in response")
-            return 0
+            accounts = getattr(resp, "value", []) or []
 
         total = 0
-        for i, acc in enumerate(accounts):
-            print(f"\nAccount [{i}] type: {type(acc)}")
-            print(f"Account [{i}] content: {acc}")
-
+        for acc in accounts:
             try:
                 if isinstance(acc, dict):
-                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {})
+                    parsed = acc["account"]["data"]["parsed"]
                 else:
                     parsed = acc.account.data.parsed
 
-                print(f"Parsed: {parsed}")
                 amt = int(parsed["info"]["tokenAmount"]["amount"])
-                print(f"Extracted amount: {amt}")
                 total += amt
             except Exception as e:
-                print(f"Failed to parse account [{i}]: {e}")
+                print(f"Parse error: {e}")
+                continue
 
         return total
 
     except Exception as e:
-        print(f"RPC exception: {e}")
+        print(f"RPC failed: {e}")
         return 0
 
 
