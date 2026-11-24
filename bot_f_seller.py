@@ -270,22 +270,22 @@ def find_position_for_mint(positions: List[Dict[str, Any]], mint: str) -> Dict[s
     return None
 
 
+
 def get_token_balance_raw_safe(mint: str, owner: str) -> int:
     """
-    Defensive token balance reader that works with older solana-py versions.
-    Returns raw token amount (integer).
+    Reliable token balance reader for the current server environment.
+    Forces jsonParsed encoding and handles both dict / object responses.
     """
-    # ---------- 1. RPC (preferred) ----------
     try:
         owner_pk = Pubkey.from_string(owner)
         mint_pk  = Pubkey.from_string(mint)
 
         resp = sol_client.get_token_accounts_by_owner(
             owner_pk,
-            TokenAccountOpts(mint=mint_pk)
+            TokenAccountOpts(mint=mint_pk, encoding="jsonParsed")
         )
 
-        # Handle both object-style and raw-dict responses
+        # Handle both raw dict and object-style responses
         if isinstance(resp, dict):
             accounts = resp.get("result", {}).get("value", []) or []
         else:
@@ -294,9 +294,8 @@ def get_token_balance_raw_safe(mint: str, owner: str) -> int:
         total = 0
         for acc in accounts:
             try:
-                # Two common shapes
                 if isinstance(acc, dict):
-                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {})
+                    parsed = acc["account"]["data"]["parsed"]
                 else:
                     parsed = acc.account.data.parsed
 
@@ -305,25 +304,11 @@ def get_token_balance_raw_safe(mint: str, owner: str) -> int:
             except Exception:
                 continue
 
-        if total > 0:
-            return total
+        return total
 
     except Exception as e:
         print(f"[balance] RPC failed: {e}")
-
-    # ---------- 2. Helius fallback ----------
-    try:
-        url = f"https://api.helius.xyz/v0/addresses/{owner}/balances?api-key={HELIUS_API_KEY}"
-        resp = requests.get(url, timeout=8)
-        if resp.status_code == 200 and resp.text.strip():
-            data = resp.json()
-            for t in data.get("tokens", []):
-                if t.get("mint") == mint:
-                    return int(t.get("amount") or t.get("tokenAmount") or 0)
-    except Exception as e:
-        print(f"[balance] Helius failed: {e}")
-
-    return 0
+        return 0
 
 
 
